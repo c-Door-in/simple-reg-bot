@@ -4,8 +4,8 @@ import requests
 from enum import Enum, auto
 from environs import Env
 from time import sleep
-from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
 
 import logging
 
@@ -32,11 +32,25 @@ def start(update, context):
     return States.MAIN
 
 
+def main_menu(update, context):
+    keyboard = [
+        ['➡ Войти на сайт'],
+        ['✉ Написать нам']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    context.bot.send_message(
+        text='Главное меню. Выберете действие!',
+        chat_id=update.effective_chat.id,
+        reply_markup=reply_markup,
+    )
+
+    return States.MAIN
+
+
 def phone_request(update, context):
     keyboard = [
         [KeyboardButton('Отправить номер телефона', request_contact=True)],
-        ['Гостевая ссылка (без входа)'],
-        ['Отмена'],
+        ['Гостевая ссылка (без входа)', 'Отмена'],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     update.message.reply_text(
@@ -60,29 +74,31 @@ def get_api_respone(update, context):
     }
     response = requests.post(api_url, data=payload)
     response.raise_for_status()
+    user_status = response.json()
 
-    for user_reg_status, user_link in response.json().items():
-        if user_reg_status == 'register':
-            text = dedent('''
-            📱 По вашему номеру не найдено регистрации.\n\n
-            Ниже указаны ссылки на *регистрацию* и на 
-            *прикрепление/смену номера* 👇\n\n
-            _(ссылки действуют 5 мин)_''')
-        elif user_reg_status == 'login':
-            text = f'Вот ссылка для входа на сайт\n(действует 5 мин)\n\n{user_link}'
+    if 'register' in user_status:
+        text = dedent('''
+        📱 По вашему номеру не найдено регистрации.\n
+        Ниже указаны ссылки на *регистрацию* и на 
+        *прикрепление/смену номера* 👇\n
+        _(ссылки действуют 5 мин)_''')
 
-    keyboard = [
-        ['➡ Войти на сайт'],
-        ['✉ Написать нам']
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text(
-        'Приветствуем!',
-        parse_mode='MarkdownV2',
-        reply_markup=reply_markup,
-    )
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url='https://www.yandex.ru')],
+                             [InlineKeyboardButton('Завершить', callback_data='Завершить')]]
+        )
+        update.message.reply_text(
+            text,
+            parse_mode='markdown',
+            reply_markup=reply_markup,
+        )
+        return States.REQUEST
+    elif 'login' in user_status:
+        user_link = user_status['login']
+        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин)_\n\n[{user_link}]({user_link})'
+        update.message.reply_text(text, parse_mode='markdown')
 
-    return States.MAIN
+    return main_menu(update, context)
 
 
 def send_email(update, context):
@@ -123,11 +139,14 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             States.MAIN: [
-                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), phone_request),
                 MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
             ],
             States.REQUEST: [
+                CallbackQueryHandler(main_menu, pattern=r'^Завершить$'),
                 MessageHandler(Filters.contact, get_api_respone),
+                MessageHandler(Filters.regex(r'^Гостевая ссылка (без входа)$'), main_menu),
+                MessageHandler(Filters.regex(r'^Отмена$'), main_menu),
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
