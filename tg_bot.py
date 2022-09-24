@@ -66,16 +66,15 @@ def get_api_respone(update, context):
     response = requests.post(api_url, data=payload)
     response.raise_for_status()
     user_status = response.json()
-
     if 'register' in user_status:
+        user_link = user_status['register']
         text = dedent('''
         📱 По вашему номеру не найдено регистрации.\n
         Ниже указаны ссылки на *регистрацию* и на 
         *прикрепление/смену номера* 👇\n
         _(ссылки действуют 5 мин)_''')
-
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url='https://www.yandex.ru')],
+            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url=f'https://yandex.ru')],
                              [InlineKeyboardButton('Завершить', callback_data='Завершить')]]
         )
         update.message.reply_text(
@@ -83,10 +82,10 @@ def get_api_respone(update, context):
             parse_mode='markdown',
             reply_markup=reply_markup,
         )
-        return States.MAIN
+        return main_menu(update, context)
     elif 'login' in user_status:
         user_link = user_status['login']
-        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин)_\n\n[{user_link}]({user_link})'
+        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}](https://yandex.ru)'
         update.message.reply_text(text, parse_mode='markdown')
 
     return main_menu(update, context)
@@ -145,7 +144,8 @@ def main():
                 MessageHandler(Filters.regex(r'^Отмена$'), phone_request),
             ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler('cancel', cancel)],
+        allow_reentry=True,
     )
 
     while True:
