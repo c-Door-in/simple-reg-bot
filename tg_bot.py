@@ -1,3 +1,5 @@
+from textwrap import dedent
+
 import requests
 from enum import Enum, auto
 from environs import Env
@@ -56,21 +58,45 @@ def get_api_respone(update, context):
          'chat_id': chat_id,
          'username': username
     }
-    logger.debug(f'PAYLOAD - {payload}')
     response = requests.post(api_url, data=payload)
-    logger.debug(f'API_URL - {response.url}')
-    logger.debug(f'RESPONSE_STATUS - {response}')
-    # logger.debug(f'RESPONSE - {response.json()}')
     response.raise_for_status()
 
-    # for user_reg_status, user_link in response.json().items():
-    #     if user_reg_status == 'register':
-    #         text = f'Зарегистрируйтесь по ссылке:\n{user_link}'
-    #     elif user_reg_status == 'login':
-    #         text = f'Войдите по ссылке:\n{user_link}'
-    text = response.text
-    update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
-    return States.REQUEST
+    for user_reg_status, user_link in response.json().items():
+        if user_reg_status == 'register':
+            text = dedent('''
+            📱 По вашему номеру не найдено регистрации.\n\n
+            Ниже указаны ссылки на *регистрацию* и на 
+            *прикрепление/смену номера* 👇\n\n
+            _(ссылки действуют 5 мин)_''')
+        elif user_reg_status == 'login':
+            text = f'Вот ссылка для входа на сайт\n(действует 5 мин)\n\n{user_link}'
+
+    keyboard = [
+        ['➡ Войти на сайт'],
+        ['✉ Написать нам']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        'Приветствуем!',
+        parse_mode='MarkdownV2',
+        reply_markup=reply_markup,
+    )
+
+    return States.MAIN
+
+
+def send_email(update, context):
+    keyboard = [
+        ['➡ Войти на сайт'],
+        ['✉ Написать нам']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        'Сделать функцию отправки письма',
+        reply_markup=reply_markup,
+    )
+
+    return States.MAIN
 
 
 def cancel(update, context):
@@ -96,6 +122,10 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
+            States.MAIN: [
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
+            ],
             States.REQUEST: [
                 MessageHandler(Filters.contact, get_api_respone),
             ],
