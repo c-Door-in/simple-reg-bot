@@ -17,19 +17,18 @@ class States(Enum):
     REQUEST = auto()
 
 
-def start(update, context):
-
+def phone_request(update, context):
     keyboard = [
-        ['➡ Войти на сайт'],
-        ['✉ Написать нам']
+        [KeyboardButton('Отправить номер телефона', request_contact=True)],
+        ['Гостевая ссылка (без входа)', 'Отмена'],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     update.message.reply_text(
-        'Приветствуем!',
+        'Чтобы войти или зарегистрироваться на сайте, нужно предоставить номер',
         reply_markup=reply_markup,
     )
 
-    return States.MAIN
+    return States.REQUEST
 
 
 def main_menu(update, context):
@@ -47,22 +46,14 @@ def main_menu(update, context):
     return States.MAIN
 
 
-def phone_request(update, context):
-    keyboard = [
-        [KeyboardButton('Отправить номер телефона', request_contact=True)],
-        ['Гостевая ссылка (без входа)', 'Отмена'],
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text(
-        'Чтобы войти или зарегистрироваться на сайте, нужно предоставить номер',
-        reply_markup=reply_markup,
-    )
-
-    return States.REQUEST
+def start(update, context):
+    if not 'phonenumber' in context.user_data:
+        return phone_request(update, context)
+    return main_menu(update, context)
 
 
 def get_api_respone(update, context):
-    phone_number = update.message.contact.phone_number
+    phone_number = context.user_data['phone_number']
     chat_id = update.message.chat_id
     username = update.message.chat.username
 
@@ -92,13 +83,18 @@ def get_api_respone(update, context):
             parse_mode='markdown',
             reply_markup=reply_markup,
         )
-        return States.REQUEST
+        return States.MAIN
     elif 'login' in user_status:
         user_link = user_status['login']
         text = f'Вот ссылка для входа на сайт\n_(действует 5 мин)_\n\n[{user_link}]({user_link})'
         update.message.reply_text(text, parse_mode='markdown')
 
     return main_menu(update, context)
+
+
+def handle_new_phonenumber(update, context):
+    context.user_data['phone_number'] = update.message.contact.phone_number
+    return get_api_respone(update, context)
 
 
 def send_email(update, context):
@@ -139,14 +135,14 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             States.MAIN: [
-                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), phone_request),
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
                 MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
+                CallbackQueryHandler(main_menu, pattern=r'^Завершить$'),
             ],
             States.REQUEST: [
-                CallbackQueryHandler(main_menu, pattern=r'^Завершить$'),
-                MessageHandler(Filters.contact, get_api_respone),
-                MessageHandler(Filters.regex(r'^Гостевая ссылка (без входа)$'), main_menu),
-                MessageHandler(Filters.regex(r'^Отмена$'), main_menu),
+                MessageHandler(Filters.contact, handle_new_phonenumber),
+                MessageHandler(Filters.regex(r'^Гостевая ссылка'), phone_request),
+                MessageHandler(Filters.regex(r'^Отмена$'), phone_request),
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
