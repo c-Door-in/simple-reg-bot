@@ -11,14 +11,31 @@ logger = logging.getLogger(__name__)
 
 
 class States(Enum):
+    MAIN = auto()
     REQUEST = auto()
-    ANSWER = auto()
 
 
 def start(update, context):
 
-    keyboard = [[KeyboardButton('Передать контакт',
-                                request_contact=True)]]
+    keyboard = [
+        ['➡ Войти на сайт'],
+        ['✉ Написать нам']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        'Приветствуем!',
+        reply_markup=reply_markup,
+    )
+
+    return States.MAIN
+
+
+def phone_request(update, context):
+    keyboard = [
+        [KeyboardButton('Отправить номер телефона', request_contact=True)],
+        ['Гостевая ссылка (без входа)'],
+        ['Отмена'],
+    ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     update.message.reply_text(
         'Чтобы войти или зарегистрироваться на сайте, нужно предоставить номер',
@@ -39,16 +56,21 @@ def get_api_respone(update, context):
          'chat_id': chat_id,
          'username': username
     }
+    logger.debug(f'PAYLOAD - {payload}')
     response = requests.post(api_url, data=payload)
+    logger.debug(f'API_URL - {response.url}')
+    logger.debug(f'RESPONSE_STATUS - {response}')
+    # logger.debug(f'RESPONSE - {response.json()}')
     response.raise_for_status()
 
-    for user_reg_status, user_link in response.json().items():
-        if user_reg_status == 'register':
-            text = f'Зарегистрируйтесь по ссылке:\n{user_link}'
-        elif user_reg_status == 'login':
-            text = f'Войдите по ссылке:\n{user_link}'
+    # for user_reg_status, user_link in response.json().items():
+    #     if user_reg_status == 'register':
+    #         text = f'Зарегистрируйтесь по ссылке:\n{user_link}'
+    #     elif user_reg_status == 'login':
+    #         text = f'Войдите по ссылке:\n{user_link}'
+    text = response.text
     update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
-    return ConversationHandler.END
+    return States.REQUEST
 
 
 def cancel(update, context):
