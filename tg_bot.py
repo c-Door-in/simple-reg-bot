@@ -1,3 +1,5 @@
+from datetime import datetime
+from email.policy import default
 from textwrap import dedent
 
 import requests
@@ -15,6 +17,8 @@ logger = logging.getLogger(__name__)
 class States(Enum):
     MAIN = auto()
     REQUEST = auto()
+    WRITE_TO_US = auto()
+    MESSAGE_TO_ADMIN = auto()
 
 
 def phone_request(update, context):
@@ -96,11 +100,10 @@ def get_guest_link(update, context):
     api_guest_url = context.bot_data['api_guest_url']
     response = requests.get(api_guest_url)
     guest_url = response.json()['url']
-    text = f'Вот вот гостевая ссылка для входа на сайт\n_(действует 5 мин_\n\n[{guest_url}]({guest_url})'
+    text = f'Вот гостевая ссылка для входа на сайт\n_(действует 5 мин_\n\n[{guest_url}]({guest_url})'
     update.message.reply_text(text, parse_mode='markdown')
 
     return start(update, context)
-
 
 
 def handle_new_phonenumber(update, context):
@@ -108,18 +111,71 @@ def handle_new_phonenumber(update, context):
     return get_api_respone(update, context)
 
 
-def send_email(update, context):
+def write_to_us(update, context):
+    text ='Внимательно выберите тему обращения:'
+    reply_markup=InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton('Предложение партнерства', callback_data='Предложение партнерства'),
+                InlineKeyboardButton('Активировать кабинет', callback_data='Активировать кабинет')
+            ],
+            [
+                InlineKeyboardButton('Забыл(а) пароль', callback_data='Забыл(а) пароль'),
+                InlineKeyboardButton('Другое', callback_data='Другое')
+            ],
+        ],
+    )
+    update.message.reply_text(
+        text,
+        parse_mode='markdown',
+        reply_markup=reply_markup,
+    )
+    return States.WRITE_TO_US
+
+
+def choose_topic(update, context):
+    topic = update.callback_query.data
+    context.user_data['topic'] = topic
     keyboard = [
         ['➡ Войти на сайт'],
         ['✉ Написать нам']
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text(
-        'Сделать функцию отправки письма',
+    context.bot.send_message(
+        text=f'Тема: {topic}\nВведите текст вашего обращения:',
+        chat_id=update.effective_chat.id,
+        parse_mode='markdown',
         reply_markup=reply_markup,
     )
 
-    return States.MAIN
+    return States.MESSAGE_TO_ADMIN
+
+
+
+def send_message_to_admin(update, context):
+    if not 'phone_number' in context.user_data:
+        phone = 'Не указан'
+    else:
+        phone = context.user_data['phone_number']
+    topic = context.user_data['topic']
+
+    message = dedent(f'''
+        Дата и время: {str(datetime.now())}
+        chat id: {update.message.chat_id}
+        username: {update.message.chat.username}
+        phone: {phone}
+        Тема: {topic}
+        Текст сообщения: {update.message.text}'''
+    )
+
+    if context.bot_data['admin_chat_id']:
+        context.bot.send_message(
+            text=message,
+            chat_id=context.bot_data['admin_chat_id'],
+        )
+
+    update.message.reply_text('Сообщение отослано.')
+    return start(update, context)
 
 
 def cancel(update, context):
@@ -147,15 +203,25 @@ def main():
         states={
             States.MAIN: [
                 MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
-                MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), write_to_us),
             ],
             States.REQUEST: [
                 MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
-                MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), write_to_us),
                 CallbackQueryHandler(start, pattern=r'^Завершить$'),
                 MessageHandler(Filters.contact, handle_new_phonenumber),
                 MessageHandler(Filters.regex(r'^Гостевая ссылка'), get_guest_link),
                 MessageHandler(Filters.regex(r'^Отмена$'), start),
+            ],
+            States.WRITE_TO_US: [
+                CallbackQueryHandler(choose_topic),
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), write_to_us),
+            ],
+            States.MESSAGE_TO_ADMIN: [
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), write_to_us),
+                MessageHandler(Filters.text, send_message_to_admin),
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
@@ -171,6 +237,7 @@ def main():
             dp.bot_data = {
                 'api_url': env.str('API_URL'),
                 'api_guest_url': env.str('API_GUEST_URL'),
+                'admin_chat_id': env.str('ADMIN_CHAT_ID', default=None)
             }
             updater.start_polling()
             updater.idle()
