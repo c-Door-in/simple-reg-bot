@@ -47,7 +47,7 @@ def main_menu(update, context):
 
 
 def start(update, context):
-    if not 'phonenumber' in context.user_data:
+    if not 'phone_number' in context.user_data:
         return phone_request(update, context)
     return main_menu(update, context)
 
@@ -69,10 +69,11 @@ def get_api_respone(update, context):
     if 'register' in user_status:
         user_link = user_status['register']
         text = dedent('''
-        📱 По вашему номеру не найдено регистрации.\n
-        Ниже указаны ссылки на *регистрацию* и на 
-        *прикрепление/смену номера* 👇\n
-        _(ссылки действуют 5 мин)_''')
+            📱 По вашему номеру не найдено регистрации.\n
+            Ниже указаны ссылки на *регистрацию* и на 
+            *прикрепление/смену номера* 👇\n
+            _(ссылки действуют 5 мин)_'''
+        )
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url=f'https://yandex.ru')],
                              [InlineKeyboardButton('Завершить', callback_data='Завершить')]]
@@ -82,7 +83,7 @@ def get_api_respone(update, context):
             parse_mode='markdown',
             reply_markup=reply_markup,
         )
-        return main_menu(update, context)
+        return States.REQUEST
     elif 'login' in user_status:
         user_link = user_status['login']
         text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}](https://yandex.ru)'
@@ -126,7 +127,7 @@ def error(update, error):
 
 def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+                    level=logging.DEBUG)
     env = Env()
     env.read_env()
 
@@ -136,12 +137,14 @@ def main():
             States.MAIN: [
                 MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
                 MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
-                CallbackQueryHandler(main_menu, pattern=r'^Завершить$'),
             ],
             States.REQUEST: [
+                MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
+                MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
+                CallbackQueryHandler(start, pattern=r'^Завершить$'),
                 MessageHandler(Filters.contact, handle_new_phonenumber),
-                MessageHandler(Filters.regex(r'^Гостевая ссылка'), phone_request),
-                MessageHandler(Filters.regex(r'^Отмена$'), phone_request),
+                MessageHandler(Filters.regex(r'^Гостевая ссылка'), start),
+                MessageHandler(Filters.regex(r'^Отмена$'), start),
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
