@@ -92,6 +92,17 @@ def get_api_respone(update, context):
     return main_menu(update, context)
 
 
+def get_guest_link(update, context):
+    api_guest_url = context.bot_data['api_guest_url']
+    response = requests.get(api_guest_url)
+    guest_url = response.json()['url']
+    text = f'Вот вот гостевая ссылка для входа на сайт\n_(действует 5 мин_\n\n[{guest_url}]({guest_url})'
+    update.message.reply_text(text, parse_mode='markdown')
+
+    return start(update, context)
+
+
+
 def handle_new_phonenumber(update, context):
     context.user_data['phone_number'] = update.message.contact.phone_number
     return get_api_respone(update, context)
@@ -143,7 +154,7 @@ def main():
                 MessageHandler(Filters.regex(r'^✉ Написать нам$'), send_email),
                 CallbackQueryHandler(start, pattern=r'^Завершить$'),
                 MessageHandler(Filters.contact, handle_new_phonenumber),
-                MessageHandler(Filters.regex(r'^Гостевая ссылка'), start),
+                MessageHandler(Filters.regex(r'^Гостевая ссылка'), get_guest_link),
                 MessageHandler(Filters.regex(r'^Отмена$'), start),
             ],
         },
@@ -159,6 +170,7 @@ def main():
             dp.add_error_handler(error)
             dp.bot_data = {
                 'api_url': env.str('API_URL'),
+                'api_guest_url': env.str('API_GUEST_URL'),
             }
             updater.start_polling()
             updater.idle()
