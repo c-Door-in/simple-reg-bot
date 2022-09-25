@@ -79,7 +79,7 @@ def get_api_respone(update, context):
             _(ссылки действуют 5 мин)_'''
         )
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url=f'https://yandex.ru')],
+            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url='https://ya.ru')],
                              [InlineKeyboardButton('Завершить', callback_data='Завершить')]]
         )
         update.message.reply_text(
@@ -90,7 +90,7 @@ def get_api_respone(update, context):
         return States.REQUEST
     elif 'login' in user_status:
         user_link = user_status['login']
-        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}](https://yandex.ru)'
+        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}](https://ya.ru)'
         update.message.reply_text(text, parse_mode='markdown')
 
     return main_menu(update, context)
