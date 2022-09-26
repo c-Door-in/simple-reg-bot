@@ -56,6 +56,13 @@ def start(update, context):
     return main_menu(update, context)
 
 
+def delete_last_message(update, context):
+    chat_id = update.callback_query.message.chat_id
+    message_id = update.callback_query.message.message_id
+    context.bot.delete_message(chat_id, message_id)
+    return start(update, context)
+
+
 def get_api_respone(update, context):
     phone_number = context.user_data['phone_number']
     chat_id = update.message.chat_id
@@ -79,7 +86,7 @@ def get_api_respone(update, context):
             _(ссылки действуют 5 мин)_'''
         )
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url='https://ya.ru')],
+            inline_keyboard=[[InlineKeyboardButton('Новая регистрация', url=user_link)],
                              [InlineKeyboardButton('Завершить', callback_data='Завершить')]]
         )
         update.message.reply_text(
@@ -90,7 +97,7 @@ def get_api_respone(update, context):
         return States.REQUEST
     elif 'login' in user_status:
         user_link = user_status['login']
-        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}](https://ya.ru)'
+        text = f'Вот ссылка для входа на сайт\n_(действует 5 мин_\n\n[{user_link}]({user_link})'
         update.message.reply_text(text, parse_mode='markdown')
 
     return main_menu(update, context)
@@ -208,7 +215,7 @@ def main():
             States.REQUEST: [
                 MessageHandler(Filters.regex(r'^➡ Войти на сайт$'), get_api_respone),
                 MessageHandler(Filters.regex(r'^✉ Написать нам$'), write_to_us),
-                CallbackQueryHandler(start, pattern=r'^Завершить$'),
+                CallbackQueryHandler(delete_last_message, pattern=r'^Завершить$'),
                 MessageHandler(Filters.contact, handle_new_phonenumber),
                 MessageHandler(Filters.regex(r'^Гостевая ссылка'), get_guest_link),
                 MessageHandler(Filters.regex(r'^Отмена$'), start),
