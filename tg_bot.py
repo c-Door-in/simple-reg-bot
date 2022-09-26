@@ -1,5 +1,4 @@
 from datetime import datetime
-from email.policy import default
 from textwrap import dedent
 
 import requests
@@ -205,6 +204,8 @@ def main():
     env = Env()
     env.read_env()
 
+    bot_token = env.str('TG_BOT_TOKEN')
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -237,7 +238,7 @@ def main():
 
     while True:
         try:
-            updater = Updater(token=env.str('TG_BOT_TOKEN'))
+            updater = Updater(token=bot_token)
             dp = updater.dispatcher
             dp.add_handler(conv_handler)
             dp.add_error_handler(error)
@@ -246,7 +247,13 @@ def main():
                 'api_guest_url': env.str('API_GUEST_URL'),
                 'admin_chat_id': env.str('ADMIN_CHAT_ID', default=None)
             }
-            updater.start_polling()
+            # updater.start_polling()
+            updater.start_webhook(listen='0.0.0.0',
+                      port=8443,
+                      url_path=bot_token,
+                      key='private.key',
+                      cert='cert.pem',
+                      webhook_url=f'https://185.194.216.110:8443/{bot_token}')
             updater.idle()
         except Exception:
             logger.exception('Ошибка в simple-reg-bot. Перезапуск через 5 секунд.')
