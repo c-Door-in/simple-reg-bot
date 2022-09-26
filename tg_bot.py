@@ -205,6 +205,10 @@ def main():
     env.read_env()
 
     bot_token = env.str('TG_BOT_TOKEN')
+    key_path = env.str('KEY_PATH')
+    cert_path = env.str('CERT_PATH')
+    public_ip = env.str('PUBLIC_IP')
+
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -251,9 +255,9 @@ def main():
             updater.start_webhook(listen='0.0.0.0',
                       port=8443,
                       url_path=bot_token,
-                      key='private.key',
-                      cert='cert.pem',
-                      webhook_url=f'https://185.194.216.110:8443/{bot_token}')
+                      key=key_path,
+                      cert=cert_path,
+                      webhook_url=f'{public_ip}:8443/{bot_token}')
             updater.idle()
         except Exception:
             logger.exception('Ошибка в simple-reg-bot. Перезапуск через 5 секунд.')
